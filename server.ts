@@ -35,25 +35,33 @@ async function startServer() {
   function serveStatic() {
     const distPath = path.resolve(process.cwd(), "dist");
     
-    // Serve static files
+    console.log(`Setting up static server for: ${distPath}`);
+    if (!fs.existsSync(distPath)) {
+      console.warn(`WARNING: dist directory not found at ${distPath}`);
+    }
+
     app.use(express.static(distPath));
 
-    // Handle SPA fallback
     app.get("*", (req, res) => {
-      // Avoid circular redirects for missing assets
-      if (req.path.includes('.') || req.path.startsWith('/api')) {
-        return res.status(404).end();
+      // API routes should not fall back to index.html
+      if (req.path.startsWith('/api')) {
+        return res.status(404).json({ error: 'Not Found' });
+      }
+
+      // If the path looks like a file (has an extension), return 404 instead of index.html
+      const ext = path.extname(req.path);
+      if (ext && ext.length > 1) {
+          return res.status(404).send('File not found');
       }
 
       const indexPath = path.join(distPath, "index.html");
       res.sendFile(indexPath, (err) => {
         if (err) {
-          console.error(`Error sending index.html from ${indexPath}:`, err);
-          res.status(404).send(`404: Page not found. This is a Single Page Application and the route "${req.path}" failed to resolve to a static file or index.html fallback.`);
+          console.error(`Error sending index.html:`, err);
+          res.status(404).send(`Application Error: Build artifacts missing.`);
         }
       });
     });
-    console.log(`Serving static files from ${distPath}`);
   }
 
   app.listen(PORT, "0.0.0.0", () => {
