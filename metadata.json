@@ -1,0 +1,6 @@
+{
+  "name": "SMK Prima Unggul CBT",
+  "description": "A modern Computer Based Test (CBT) application for SMK Prima Unggul with roles for Admin, Guru, and Siswa.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
