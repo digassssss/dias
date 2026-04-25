@@ -48,11 +48,15 @@ async function startServer() {
   }
 
   function serveStatic() {
-    const distPath = path.resolve(__dirname, "dist");
-    console.log(`Serving static files from: ${distPath}`);
+    const distPath = path.resolve(process.cwd(), "dist");
+    console.log(`Checking for build artifacts at: ${distPath}`);
     
     if (!fs.existsSync(distPath)) {
-      console.error(`CRITICAL: dist directory missing at ${distPath}`);
+      console.error(`CRITICAL ERROR: Build artifacts missing at ${distPath}`);
+      console.log("Current working directory:", process.cwd());
+      console.log("Directory contents:", fs.readdirSync(process.cwd()));
+    } else {
+      console.log("Build artifacts found. Listing dist contents:", fs.readdirSync(distPath));
     }
 
     app.use(express.static(distPath));
@@ -68,10 +72,17 @@ async function startServer() {
       }
 
       const indexPath = path.join(distPath, "index.html");
+      if (!fs.existsSync(indexPath)) {
+        console.error(`Fallback failure: index.html not found at ${indexPath}`);
+        return res.status(500).send("Application shell missing. Please trigger a rebuild.");
+      }
+
       res.sendFile(indexPath, (err) => {
         if (err) {
           console.error(`Failed to send index.html: ${err.message}`);
-          res.status(404).send("Application shell missing. Please rebuild.");
+          if (!res.headersSent) {
+            res.status(500).send("Error serving application.");
+          }
         }
       });
     });
