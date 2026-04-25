@@ -30,12 +30,22 @@ async function startServer() {
   });
 
   if (process.env.NODE_ENV !== "production") {
-    console.log("[Server] Configuring Vite middleware for development");
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
+    console.log("[Server] Configuring Vite middleware for development...");
+    try {
+      const vite = await createViteServer({
+        server: { 
+          middlewareMode: true,
+          allowedHosts: true
+        },
+        appType: "spa",
+      });
+      console.log("[Server] Vite server created successfully");
+      app.use(vite.middlewares);
+      console.log("[Server] Vite middlewares attached");
+    } catch (viteError) {
+      console.error("[Server] Failed to initialize Vite:", viteError);
+      throw viteError;
+    }
   } else {
     console.log("[Server] Configuring static file serving for production");
     const distPath = path.resolve(__dirname, "dist");
