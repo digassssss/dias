@@ -3,19 +3,33 @@ import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
 
+console.log("Starting server script...");
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 async function startServer() {
+  console.log("Initializing express application...");
   const app = express();
   const PORT = 3000;
 
+  console.log(`Environment: NODE_ENV=${process.env.NODE_ENV}`);
+
+  // Test route
+  app.get("/api/test-server", (req, res) => {
+    res.send("Express server is responding correctly!");
+  });
+
   // Health check
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok" });
+    res.json({ 
+      status: "ok", 
+      env: process.env.NODE_ENV,
+      time: new Date().toISOString()
+    });
   });
 
   if (process.env.NODE_ENV !== "production") {
+    console.log("Running in development mode...");
     try {
       const { createServer: createViteServer } = await import("vite");
       const vite = await createViteServer({
@@ -23,52 +37,48 @@ async function startServer() {
         appType: "spa",
       });
       app.use(vite.middlewares);
-      console.log("Vite middleware loaded");
+      console.log("Vite dev middleware attached");
     } catch (e) {
-      console.log("Starting in production mode (Vite missing)");
+      console.error("Vite dev middleware failed:", e);
       serveStatic();
     }
   } else {
+    console.log("Running in production mode...");
     serveStatic();
   }
 
   function serveStatic() {
-    const distPath = path.resolve(process.cwd(), "dist");
+    const distPath = path.resolve(__dirname, "dist");
+    console.log(`Serving static files from: ${distPath}`);
     
-    console.log(`Setting up static server for: ${distPath}`);
     if (!fs.existsSync(distPath)) {
-      console.warn(`WARNING: dist directory not found at ${distPath}`);
+      console.error(`CRITICAL: dist directory missing at ${distPath}`);
     }
 
     app.use(express.static(distPath));
 
     app.get("*", (req, res) => {
-      // API routes should not fall back to index.html
       if (req.path.startsWith('/api')) {
-        return res.status(404).json({ error: 'Not Found' });
+        return res.status(404).json({ error: 'Endpoint not found' });
       }
 
-      // If the path looks like a file (has an extension), return 404 instead of index.html
-      const ext = path.extname(req.path);
-      if (ext && ext.length > 1) {
-          return res.status(404).send('File not found');
+      // Filter out file requests that aren't found
+      if (req.path.includes('.')) {
+        return res.status(404).end();
       }
 
       const indexPath = path.join(distPath, "index.html");
       res.sendFile(indexPath, (err) => {
         if (err) {
-          console.error(`Error sending index.html:`, err);
-          res.status(404).send(`Application Error: Build artifacts missing.`);
+          console.error(`Failed to send index.html: ${err.message}`);
+          res.status(404).send("Application shell missing. Please rebuild.");
         }
       });
     });
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server is LIVE on port ${PORT}`);
-    console.log(`Current directory: ${process.cwd()}`);
-    console.log(`__dirname: ${__dirname}`);
-    console.log(`Environment: ${process.env.NODE_ENV}`);
+    console.log(`>>> SERVER READY: http://0.0.0.0:${PORT}`);
   });
 }
 
