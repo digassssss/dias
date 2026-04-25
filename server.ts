@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
+import fs from "fs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,27 +16,44 @@ async function startServer() {
   });
 
   if (process.env.NODE_ENV !== "production") {
-    const { createServer: createViteServer } = await import("vite");
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
+    try {
+      const { createServer: createViteServer } = await import("vite");
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+      console.log("Vite middleware loaded");
+    } catch (e) {
+      console.log("Starting in production mode (Vite missing)");
+      serveStatic();
+    }
   } else {
-    // In production, serve from the absolute path to the dist directory
-    const distPath = path.join(process.cwd(), "dist");
+    serveStatic();
+  }
+
+  function serveStatic() {
+    const distPath = path.resolve(process.cwd(), "dist");
     
+    // Serve static files
     app.use(express.static(distPath));
 
+    // Handle SPA fallback
     app.get("*", (req, res) => {
+      // Avoid circular redirects for missing assets
+      if (req.path.includes('.') || req.path.startsWith('/api')) {
+        return res.status(404).end();
+      }
+
       const indexPath = path.join(distPath, "index.html");
       res.sendFile(indexPath, (err) => {
         if (err) {
           console.error(`Error sending index.html from ${indexPath}:`, err);
-          res.status(404).send(`404: Page not found. The app is a Single Page Application and the route "${req.path}" was not found, and index.html was also missing at ${indexPath}. Please rebuild the app.`);
+          res.status(404).send(`404: Page not found. This is a Single Page Application and the route "${req.path}" failed to resolve to a static file or index.html fallback.`);
         }
       });
     });
+    console.log(`Serving static files from ${distPath}`);
   }
 
   app.listen(PORT, "0.0.0.0", () => {
