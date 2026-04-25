@@ -9,53 +9,41 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // Health check for platform diagnostics
+  // Health check
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", mode: process.env.NODE_ENV });
+    res.json({ status: "ok" });
   });
 
   if (process.env.NODE_ENV !== "production") {
-    // Development mode
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
-    console.log("Development server running with Vite middleware");
   } else {
-    // Production mode
-    const distPath = path.resolve(process.cwd(), "dist");
+    // In production, serve from the absolute path to the dist directory
+    const distPath = path.join(process.cwd(), "dist");
     
-    // Serve static assets
-    app.use(express.static(distPath, {
-      maxAge: '1y',
-      index: ['index.html']
-    }));
+    app.use(express.static(distPath));
 
-    // SPA fallback (important for refresh on nested routes)
     app.get("*", (req, res) => {
-      // Don't serve index.html for missing /api routes
-      if (req.path.startsWith('/api')) {
-        return res.status(404).json({ error: 'API route not found' });
-      }
-
-      res.sendFile(path.join(distPath, "index.html"), (err) => {
+      const indexPath = path.join(distPath, "index.html");
+      res.sendFile(indexPath, (err) => {
         if (err) {
-          console.error("Error sending index.html:", err);
-          res.status(500).send("Index file not found. Make sure the app is built.");
+          console.error(`Error sending index.html from ${indexPath}:`, err);
+          res.status(404).send(`404: Page not found. The app is a Single Page Application and the route "${req.path}" was not found, and index.html was also missing at ${indexPath}. Please rebuild the app.`);
         }
       });
     });
-    console.log(`Production server serving from ${distPath}`);
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://0.0.0.0:${PORT}`);
+    console.log(`Server is LIVE on port ${PORT}`);
+    console.log(`Current directory: ${process.cwd()}`);
+    console.log(`__dirname: ${__dirname}`);
+    console.log(`Environment: ${process.env.NODE_ENV}`);
   });
 }
 
-startServer().catch((err) => {
-  console.error("Failed to start server:", err);
-  process.exit(1);
-});
+startServer().catch(console.error);
